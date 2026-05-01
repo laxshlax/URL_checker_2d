@@ -3,109 +3,166 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DOI Online Date Fetcher</title>
+    <title>DOI Metadata Fetcher</title>
+
     <style>
         :root { --green: #2da44e; --red: #cf222e; --blue: #0969da; --border: #d0d7de; }
-        body { font-family: -apple-system, sans-serif; max-width: 1000px; margin: 30px auto; padding: 20px; color: #24292f; }
+        body { font-family: -apple-system, sans-serif; max-width: 1100px; margin: 30px auto; padding: 20px; color: #24292f; }
         .box { background: #f6f8fa; border: 1px solid var(--border); padding: 20px; border-radius: 6px; }
-        textarea { width: 100%; height: 100px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; box-sizing: border-box; font-family: monospace; }
+        textarea { width: 100%; height: 100px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; font-family: monospace; }
         button { background: var(--green); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; }
         #exportBtn { background: var(--blue); margin-left: 10px; display: none; }
+
         table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
-        th, td { border: 1px solid var(--border); padding: 10px; text-align: left; }
+        th, td { border: 1px solid var(--border); padding: 8px; text-align: left; }
         th { background: #f6f8fa; }
+
         .status-ok { color: var(--green); font-weight: bold; }
-        .date-text { color: #cf222e; font-weight: bold; } /* Highlighted Online Date */
+        .status-err { color: var(--red); font-weight: bold; }
+        .date-text { color: #cf222e; font-weight: bold; }
     </style>
 </head>
+
 <body>
 
-    <h2>DOI Metadata: Published Online</h2>
-    <div class="box">
-        <textarea id="input" placeholder="Paste DOIs here..."></textarea>
-        <button onclick="checkDOIs()">Fetch Online Dates</button>
-        <button id="exportBtn" onclick="exportCSV()">Export CSV</button>
-    </div>
+<h2>DOI Metadata Tool (Online + Volume + Issue + Month)</h2>
 
-    <table id="resultTable" style="display:none;">
-        <thead>
-            <tr>
-                <th>DOI</th>
-                <th>Status</th>
-                <th>Published Online</th>
-                <th>Journal</th>
-                <th>Title</th>
-            </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-    </table>
+<div class="box">
+    <textarea id="input" placeholder="Paste DOIs here (one per line)..."></textarea>
+    <button onclick="checkDOIs()">Fetch Metadata</button>
+    <button id="exportBtn" onclick="exportCSV()">Export CSV</button>
+</div>
 
-    <script>
-        async function checkDOIs() {
-            const lines = document.getElementById('input').value.split('\n').filter(l => l.trim());
-            const tbody = document.getElementById('tbody');
-            const table = document.getElementById('resultTable');
-            const exportBtn = document.getElementById('exportBtn');
-            
-            tbody.innerHTML = "";
-            table.style.display = "table";
+<table id="resultTable" style="display:none;">
+    <thead>
+        <tr>
+            <th>DOI</th>
+            <th>Status</th>
+            <th>Published Online</th>
+            <th>Volume</th>
+            <th>Issue</th>
+            <th>Month</th>
+            <th>Journal</th>
+            <th>Title</th>
+        </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+</table>
 
-            for (let doi of lines) {
-                doi = doi.trim();
-                let status = "VALID", onlineDate = "N/A", journal = "-", title = "-", isError = false;
+<script>
 
-                try {
-                    const res = await fetch(`https://api.crossref.org/works/${doi}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        const msg = data.message;
-                        
-                        title = msg.title ? msg.title[0] : "No title";
-                        journal = msg['container-title'] ? msg['container-title'][0] : "-";
-                        
-                        // TARGETING THE ONLINE DATE SPECIFICALLY
-                        const pubOnline = msg['published-online'];
-                        if (pubOnline && pubOnline['date-parts']) {
-                            const parts = pubOnline['date-parts'][0];
-                            // Format: YYYY-MM-DD
-                            const year = parts[0];
-                            const month = parts[1] ? String(parts[1]).padStart(2, '0') : '01';
-                            const day = parts[2] ? String(parts[2]).padStart(2, '0') : '01';
-                            onlineDate = `${year}-${month}-${day}`;
-                        } else {
-                            onlineDate = "No Online Date Listed";
-                        }
-                    } else {
-                        status = `Error ${res.status}`;
-                        isError = true;
+async function checkDOIs() {
+    const lines = document.getElementById('input').value.split('\n').filter(l => l.trim());
+    const tbody = document.getElementById('tbody');
+    const table = document.getElementById('resultTable');
+    const exportBtn = document.getElementById('exportBtn');
+
+    tbody.innerHTML = "";
+    table.style.display = "table";
+
+    for (let doi of lines) {
+        doi = doi.trim();
+
+        let status = "VALID";
+        let onlineDate = "N/A";
+        let journal = "-";
+        let title = "-";
+        let volume = "-";
+        let issue = "-";
+        let pubMonth = "-";
+
+        let isError = false;
+
+        try {
+            const res = await fetch(`https://api.crossref.org/works/${doi}`);
+
+            if (res.ok) {
+                const data = await res.json();
+                const msg = data.message;
+
+                title = msg.title ? msg.title[0] : "No title";
+                journal = msg['container-title'] ? msg['container-title'][0] : "-";
+
+                // ================= ONLINE DATE =================
+                const pubOnline = msg['published-online'];
+                if (pubOnline && pubOnline['date-parts']) {
+                    const parts = pubOnline['date-parts'][0];
+                    const y = parts[0];
+                    const m = parts[1] ? String(parts[1]).padStart(2, '0') : '01';
+                    const d = parts[2] ? String(parts[2]).padStart(2, '0') : '01';
+                    onlineDate = `${y}-${m}-${d}`;
+                } else {
+                    onlineDate = "No Online Date";
+                }
+
+                // ================= VOLUME & ISSUE =================
+                volume = msg.volume || "-";
+                issue = msg.issue || "-";
+
+                // ================= MONTH LOGIC =================
+                const pubDate =
+                    msg['published-print'] ||
+                    msg['published-online'] ||
+                    msg['issued'];
+
+                if (pubDate && pubDate['date-parts']) {
+                    const parts = pubDate['date-parts'][0];
+                    const monthNum = parts[1];
+
+                    if (monthNum) {
+                        pubMonth = new Date(0, monthNum - 1)
+                            .toLocaleString('en', { month: 'long' });
                     }
-                } catch (e) { status = "API Error"; isError = true; }
+                }
 
-                tbody.innerHTML += `<tr>
-                    <td>${doi}</td>
-                    <td class="${isError ? 'status-err' : 'status-ok'}">${status}</td>
-                    <td class="date-text">${onlineDate}</td>
-                    <td>${journal}</td>
-                    <td>${title}</td>
-                </tr>`;
+            } else {
+                status = `Error ${res.status}`;
+                isError = true;
             }
-            exportBtn.style.display = "inline-block";
+
+        } catch (e) {
+            status = "API Error";
+            isError = true;
         }
 
-        function exportCSV() {
-            let csv = "DOI,Status,PublishedOnline,Journal,Title\n";
-            document.querySelectorAll("#tbody tr").forEach(tr => {
-                const tds = tr.querySelectorAll("td");
-                const row = Array.from(tds).map(td => `"${td.innerText.replace(/"/g, '""')}"`);
-                csv += row.join(",") + "\n";
-            });
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'Online_Publication_Report.csv';
-            a.click();
-        }
-    </script>
+        tbody.innerHTML += `
+            <tr>
+                <td>${doi}</td>
+                <td class="${isError ? 'status-err' : 'status-ok'}">${status}</td>
+                <td class="date-text">${onlineDate}</td>
+                <td>${volume}</td>
+                <td>${issue}</td>
+                <td>${pubMonth}</td>
+                <td>${journal}</td>
+                <td>${title}</td>
+            </tr>`;
+    }
+
+    exportBtn.style.display = "inline-block";
+}
+
+// ================= CSV EXPORT =================
+function exportCSV() {
+    let csv = "DOI,Status,PublishedOnline,Volume,Issue,Month,Journal,Title\n";
+
+    document.querySelectorAll("#tbody tr").forEach(tr => {
+        const tds = tr.querySelectorAll("td");
+        const row = Array.from(tds).map(td =>
+            `"${td.innerText.replace(/"/g, '""')}"`
+        );
+        csv += row.join(",") + "\n";
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'DOI_Metadata_Report.csv';
+    a.click();
+}
+
+</script>
+
 </body>
 </html>
