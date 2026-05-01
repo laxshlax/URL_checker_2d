@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced DOI Metadata Fetcher</title>
+    <title>DOI Online Date Fetcher</title>
     <style>
         :root { --green: #2da44e; --red: #cf222e; --blue: #0969da; --border: #d0d7de; }
         body { font-family: -apple-system, sans-serif; max-width: 1000px; margin: 30px auto; padding: 20px; color: #24292f; }
@@ -12,21 +12,19 @@
         button { background: var(--green); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; }
         #exportBtn { background: var(--blue); margin-left: 10px; display: none; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
-        th, td { border: 1px solid var(--border); padding: 10px; text-align: left; vertical-align: top; }
-        th { background: #f6f8fa; position: sticky; top: 0; }
+        th, td { border: 1px solid var(--border); padding: 10px; text-align: left; }
+        th { background: #f6f8fa; }
         .status-ok { color: var(--green); font-weight: bold; }
-        .status-err { color: var(--red); font-weight: bold; }
-        .pub-date { color: #57606a; font-weight: 600; }
+        .date-text { color: #cf222e; font-weight: bold; } /* Highlighted Online Date */
     </style>
 </head>
 <body>
 
-    <h2>Academic DOI Tracker</h2>
+    <h2>DOI Metadata: Published Online</h2>
     <div class="box">
-        <p>Enter DOI suffixes (one per line):</p>
-        <textarea id="input" placeholder="10.1038/s41586-020-2012-7"></textarea>
-        <button onclick="checkDOIs()">Fetch Metadata</button>
-        <button id="exportBtn" onclick="exportCSV()">Export CSV Report</button>
+        <textarea id="input" placeholder="Paste DOIs here..."></textarea>
+        <button onclick="checkDOIs()">Fetch Online Dates</button>
+        <button id="exportBtn" onclick="exportCSV()">Export CSV</button>
     </div>
 
     <table id="resultTable" style="display:none;">
@@ -34,10 +32,9 @@
             <tr>
                 <th>DOI</th>
                 <th>Status</th>
-                <th>Publication Date</th>
-                <th>Journal/Source</th>
-                <th>Article Title</th>
-                <th>Full Link</th>
+                <th>Published Online</th>
+                <th>Journal</th>
+                <th>Title</th>
             </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -55,8 +52,7 @@
 
             for (let doi of lines) {
                 doi = doi.trim();
-                const fullLink = `https://doi.org/${doi}`;
-                let status = "VALID", date = "-", journal = "-", title = "-", isError = false;
+                let status = "VALID", onlineDate = "N/A", journal = "-", title = "-", isError = false;
 
                 try {
                     const res = await fetch(`https://api.crossref.org/works/${doi}`);
@@ -64,45 +60,42 @@
                         const data = await res.json();
                         const msg = data.message;
                         
-                        // Fetch Title
-                        title = msg.title ? msg.title[0] : "No title found";
+                        title = msg.title ? msg.title[0] : "No title";
+                        journal = msg['container-title'] ? msg['container-title'][0] : "-";
                         
-                        // Fetch Journal/Container Name
-                        journal = msg['container-title'] ? msg['container-title'][0] : "N/A";
-                        
-                        // Fetch Publication Date (Crossref uses "published-print" or "published-online")
-                        const dateParts = msg['published-print'] || msg['published-online'] || msg['issued'];
-                        if (dateParts && dateParts['date-parts']) {
-                            const p = dateParts['date-parts'][0];
-                            // Format as YYYY-MM or YYYY
-                            date = p[0] + (p[1] ? '-' + String(p[1]).padStart(2, '0') : '');
+                        // TARGETING THE ONLINE DATE SPECIFICALLY
+                        const pubOnline = msg['published-online'];
+                        if (pubOnline && pubOnline['date-parts']) {
+                            const parts = pubOnline['date-parts'][0];
+                            // Format: YYYY-MM-DD
+                            const year = parts[0];
+                            const month = parts[1] ? String(parts[1]).padStart(2, '0') : '01';
+                            const day = parts[2] ? String(parts[2]).padStart(2, '0') : '01';
+                            onlineDate = `${year}-${month}-${day}`;
+                        } else {
+                            onlineDate = "No Online Date Listed";
                         }
                     } else {
-                        status = `ERROR (${res.status})`;
+                        status = `Error ${res.status}`;
                         isError = true;
                     }
-                } catch (e) {
-                    status = "API TIMEOUT";
-                    isError = true;
-                }
+                } catch (e) { status = "API Error"; isError = true; }
 
                 tbody.innerHTML += `<tr>
-                    <td><strong>${doi}</strong></td>
+                    <td>${doi}</td>
                     <td class="${isError ? 'status-err' : 'status-ok'}">${status}</td>
-                    <td class="pub-date">${date}</td>
+                    <td class="date-text">${onlineDate}</td>
                     <td>${journal}</td>
                     <td>${title}</td>
-                    <td><a href="${fullLink}" target="_blank">${fullLink}</a></td>
                 </tr>`;
             }
             exportBtn.style.display = "inline-block";
         }
 
         function exportCSV() {
-            let csv = "DOI,Status,PubDate,Journal,Title,FullLink\n";
+            let csv = "DOI,Status,PublishedOnline,Journal,Title\n";
             document.querySelectorAll("#tbody tr").forEach(tr => {
                 const tds = tr.querySelectorAll("td");
-                // Clean text for CSV (remove commas and quotes)
                 const row = Array.from(tds).map(td => `"${td.innerText.replace(/"/g, '""')}"`);
                 csv += row.join(",") + "\n";
             });
@@ -110,7 +103,7 @@
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'DOI_Metadata_Report.csv';
+            a.download = 'Online_Publication_Report.csv';
             a.click();
         }
     </script>
