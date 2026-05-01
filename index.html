@@ -3,120 +3,116 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DOI Status & Metadata Tool</title>
+    <title>Universal URL & DOI Checker</title>
     <style>
-        :root { --github-green: #2da44e; --github-red: #cf222e; --border: #d0d7de; }
-        body { font-family: -apple-system, sans-serif; max-width: 850px; margin: 40px auto; padding: 0 20px; color: #24292f; line-height: 1.5; }
-        h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; font-weight: 600; }
+        :root { --github-green: #2da44e; --github-red: #cf222e; --border: #d0d7de; --blue: #0969da; }
+        body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #24292f; }
+        h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
         .controls { background: #f6f8fa; padding: 20px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 20px; }
-        textarea { width: 100%; height: 120px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; margin-bottom: 15px; font-family: monospace; font-size: 14px; }
-        .btn-group { display: flex; gap: 10px; }
-        button { background-color: var(--github-green); color: white; border: 1px solid rgba(27,31,36,0.15); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; }
-        button#exportBtn { background-color: #0969da; }
-        button:hover { opacity: 0.9; }
-        button:disabled { background-color: #94d3a2; cursor: not-allowed; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
-        th, td { border: 1px solid var(--border); padding: 12px; text-align: left; }
+        textarea { width: 100%; height: 120px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; margin-bottom: 15px; font-family: monospace; }
+        button { background-color: var(--github-green); color: white; border: 1px solid rgba(27,31,36,0.15); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        button#exportBtn { background-color: var(--blue); margin-left: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+        th, td { border: 1px solid var(--border); padding: 10px; text-align: left; }
         th { background: #f6f8fa; }
         .status-ok { color: var(--github-green); font-weight: bold; }
         .status-err { color: var(--github-red); font-weight: bold; }
-        .loading { font-style: italic; color: #57606a; margin: 10px 0; }
+        .type-tag { font-size: 10px; padding: 2px 5px; border-radius: 3px; background: #eaeef2; margin-right: 5px; }
     </style>
 </head>
 <body>
 
-    <h1>DOI Multi-Checker</h1>
+    <h1>Universal Link Checker</h1>
     <div class="controls">
-        <p>Enter DOI suffixes (one per line):</p>
-        <textarea id="doiInput" placeholder="10.1038/s41586-020-2012-7&#10;10.1126/science.abb7015"></textarea>
-        <div class="btn-group">
-            <button id="checkBtn" onclick="processDOIs()">Check Status</button>
-            <button id="exportBtn" onclick="exportCSV()" style="display:none;">Export to CSV</button>
-        </div>
+        <p>Enter <strong>DOIs</strong> (e.g., 10.1038/...) or <strong>Full URLs</strong> (e.g., http://...):</p>
+        <textarea id="userInput" placeholder="10.1038/s41586-020-2012-7&#10;http://www.laxsh.in/"></textarea>
+        <button id="checkBtn" onclick="processLinks()">Check All Links</button>
+        <button id="exportBtn" onclick="exportCSV()" style="display:none;">Export CSV</button>
     </div>
-
-    <div id="loader" class="loading" style="display:none;">Querying Crossref Registry...</div>
 
     <table id="resultsTable" style="display:none;">
         <thead>
             <tr>
-                <th>DOI</th>
+                <th>Type</th>
+                <th>Input</th>
                 <th>Status</th>
-                <th>Article Title</th>
-                <th>Link</th>
+                <th>Details/Title</th>
+                <th>Full Link</th>
             </tr>
         </thead>
         <tbody id="resultsBody"></tbody>
     </table>
 
     <script>
-        async function processDOIs() {
-            const input = document.getElementById('doiInput').value;
+        async function processLinks() {
+            const input = document.getElementById('userInput').value;
             const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            const btn = document.getElementById('checkBtn');
-            const loader = document.getElementById('loader');
             const tbody = document.getElementById('resultsBody');
             const table = document.getElementById('resultsTable');
             const exportBtn = document.getElementById('exportBtn');
 
-            if (lines.length === 0) return alert("Please enter at least one DOI.");
-
-            // Reset UI
-            btn.disabled = true;
-            loader.style.display = "block";
             tbody.innerHTML = "";
             table.style.display = "table";
-            exportBtn.style.display = "none";
 
-            for (let doi of lines) {
-                const apiURL = `https://api.crossref.org/works/${doi}`;
-                const row = document.createElement('tr');
+            for (let item of lines) {
+                const isDoi = item.startsWith('10.') && item.includes('/');
+                const fullUrl = isDoi ? `https://doi.org/${item}` : (item.startsWith('http') ? item : `http://${item}`);
                 
-                try {
-                    const response = await fetch(apiURL);
-                    if (response.ok) {
-                        const data = await response.json();
-                        const title = data.message.title ? data.message.title[0] : "No title found";
-                        row.innerHTML = `
-                            <td>${doi}</td>
-                            <td class="status-ok">VALID</td>
-                            <td>${title}</td>
-                            <td><a href="https://doi.org/${doi}" target="_blank">Open</a></td>`;
-                    } else {
-                        row.innerHTML = `
-                            <td>${doi}</td>
-                            <td class="status-err">NOT FOUND (${response.status})</td>
-                            <td>-</td>
-                            <td>-</td>`;
+                const row = document.createElement('tr');
+                const typeTag = isDoi ? '<span class="type-tag">DOI</span>' : '<span class="type-tag">URL</span>';
+                
+                if (isDoi) {
+                    // DOI Logic via Crossref API
+                    try {
+                        const res = await fetch(`https://api.crossref.org/works/${item}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            const title = data.message.title ? data.message.title[0] : "No title";
+                            updateRow(row, typeTag, item, "VALID", title, fullUrl);
+                        } else {
+                            updateRow(row, typeTag, item, "NOT FOUND", "-", fullUrl, true);
+                        }
+                    } catch (e) {
+                        updateRow(row, typeTag, item, "ERROR", "API Limit/Error", fullUrl, true);
                     }
-                } catch (error) {
-                    row.innerHTML = `<td>${doi}</td><td class="status-err">API ERROR</td><td>-</td><td>-</td>`;
+                } else {
+                    // Standard URL Logic
+                    try {
+                        // Note: Browsers block 'no-cors' status codes, but 'fetch' fails if site is down
+                        await fetch(fullUrl, { mode: 'no-cors' });
+                        updateRow(row, typeTag, item, "REACHABLE", "Website responded", fullUrl);
+                    } catch (e) {
+                        updateRow(row, typeTag, item, "OFFLINE", "Connection failed", fullUrl, true);
+                    }
                 }
                 tbody.appendChild(row);
             }
-
-            loader.style.display = "none";
-            btn.disabled = false;
             exportBtn.style.display = "inline-block";
         }
 
+        function updateRow(row, type, input, status, detail, link, isErr = false) {
+            row.innerHTML = `
+                <td>${type}</td>
+                <td>${input}</td>
+                <td class="${isErr ? 'status-err' : 'status-ok'}">${status}</td>
+                <td>${detail}</td>
+                <td><a href="${link}" target="_blank">${link}</a></td>
+            `;
+        }
+
         function exportCSV() {
-            let csv = "DOI,Status,Title\n";
-            const rows = document.querySelectorAll("#resultsBody tr");
-            rows.forEach(row => {
+            let csv = "Type,Input,Status,Details,Full_Link\n";
+            document.querySelectorAll("#resultsBody tr").forEach(row => {
                 const cols = row.querySelectorAll("td");
-                const doi = cols[0].innerText;
-                const status = cols[1].innerText;
-                const title = cols[2].innerText.replace(/,/g, ""); // Remove commas for CSV
-                csv += `${doi},${status},${title}\n`;
+                const rowData = Array.from(cols).map(c => `"${c.innerText.replace(/"/g, '""')}"`);
+                csv += rowData.join(",") + "\n";
             });
 
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'doi_report.csv';
+            a.download = 'link_status_report.csv';
             a.click();
         }
     </script>
