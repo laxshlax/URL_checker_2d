@@ -3,116 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal URL & DOI Checker</title>
+    <title>Link & DOI Validator</title>
     <style>
-        :root { --github-green: #2da44e; --github-red: #cf222e; --border: #d0d7de; --blue: #0969da; }
-        body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #24292f; }
-        h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-        .controls { background: #f6f8fa; padding: 20px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 20px; }
-        textarea { width: 100%; height: 120px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; margin-bottom: 15px; font-family: monospace; }
-        button { background-color: var(--github-green); color: white; border: 1px solid rgba(27,31,36,0.15); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
-        button#exportBtn { background-color: var(--blue); margin-left: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+        :root { --green: #2da44e; --red: #cf222e; --blue: #0969da; --border: #d0d7de; }
+        body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 30px auto; padding: 20px; color: #24292f; }
+        .box { background: #f6f8fa; border: 1px solid var(--border); padding: 20px; border-radius: 6px; }
+        textarea { width: 100%; height: 100px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; box-sizing: border-box; }
+        button { background: var(--green); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        #exportBtn { background: var(--blue); margin-left: 10px; display: none; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
         th, td { border: 1px solid var(--border); padding: 10px; text-align: left; }
-        th { background: #f6f8fa; }
-        .status-ok { color: var(--github-green); font-weight: bold; }
-        .status-err { color: var(--github-red); font-weight: bold; }
-        .type-tag { font-size: 10px; padding: 2px 5px; border-radius: 3px; background: #eaeef2; margin-right: 5px; }
+        .status-ok { color: var(--green); font-weight: bold; }
+        .status-err { color: var(--red); font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h1>Universal Link Checker</h1>
-    <div class="controls">
-        <p>Enter <strong>DOIs</strong> (e.g., 10.1038/...) or <strong>Full URLs</strong> (e.g., http://...):</p>
-        <textarea id="userInput" placeholder="10.1038/s41586-020-2012-7&#10;http://www.laxsh.in/"></textarea>
-        <button id="checkBtn" onclick="processLinks()">Check All Links</button>
-        <button id="exportBtn" onclick="exportCSV()" style="display:none;">Export CSV</button>
+    <h2>Universal Link Checker</h2>
+    <div class="box">
+        <p>Paste DOIs or URLs (one per line):</p>
+        <textarea id="input" placeholder="10.1038/s41586-020-2012-7&#10;https://google.com"></textarea>
+        <button onclick="checkLinks()">Run Check</button>
+        <button id="exportBtn" onclick="exportCSV()">Export CSV</button>
     </div>
 
-    <table id="resultsTable" style="display:none;">
+    <table id="resultTable" style="display:none;">
         <thead>
             <tr>
-                <th>Type</th>
                 <th>Input</th>
                 <th>Status</th>
-                <th>Details/Title</th>
+                <th>Title / Detail</th>
                 <th>Full Link</th>
             </tr>
         </thead>
-        <tbody id="resultsBody"></tbody>
+        <tbody id="tbody"></tbody>
     </table>
 
     <script>
-        async function processLinks() {
-            const input = document.getElementById('userInput').value;
-            const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            const tbody = document.getElementById('resultsBody');
-            const table = document.getElementById('resultsTable');
+        async function checkLinks() {
+            const lines = document.getElementById('input').value.split('\n').filter(l => l.trim());
+            const tbody = document.getElementById('tbody');
+            const table = document.getElementById('resultTable');
             const exportBtn = document.getElementById('exportBtn');
-
+            
             tbody.innerHTML = "";
             table.style.display = "table";
 
-            for (let item of lines) {
-                const isDoi = item.startsWith('10.') && item.includes('/');
-                const fullUrl = isDoi ? `https://doi.org/${item}` : (item.startsWith('http') ? item : `http://${item}`);
+            for (let raw of lines) {
+                let item = raw.trim();
+                let isDoi = item.startsWith('10.') && item.includes('/');
+                let fullLink = isDoi ? `https://doi.org/${item}` : (item.startsWith('http') ? item : `https://${item}`);
                 
-                const row = document.createElement('tr');
-                const typeTag = isDoi ? '<span class="type-tag">DOI</span>' : '<span class="type-tag">URL</span>';
-                
+                let status = "Checking...";
+                let detail = "-";
+                let isError = false;
+
                 if (isDoi) {
-                    // DOI Logic via Crossref API
                     try {
                         const res = await fetch(`https://api.crossref.org/works/${item}`);
                         if (res.ok) {
                             const data = await res.json();
-                            const title = data.message.title ? data.message.title[0] : "No title";
-                            updateRow(row, typeTag, item, "VALID", title, fullUrl);
+                            status = "VALID DOI";
+                            detail = data.message.title ? data.message.title[0] : "No title found";
                         } else {
-                            updateRow(row, typeTag, item, "NOT FOUND", "-", fullUrl, true);
+                            status = "NOT FOUND";
+                            isError = true;
                         }
-                    } catch (e) {
-                        updateRow(row, typeTag, item, "ERROR", "API Limit/Error", fullUrl, true);
-                    }
+                    } catch (e) { status = "API ERROR"; isError = true; }
                 } else {
-                    // Standard URL Logic
                     try {
-                        // Note: Browsers block 'no-cors' status codes, but 'fetch' fails if site is down
-                        await fetch(fullUrl, { mode: 'no-cors' });
-                        updateRow(row, typeTag, item, "REACHABLE", "Website responded", fullUrl);
+                        // Check standard URL
+                        const res = await fetch(fullLink, { mode: 'no-cors' });
+                        status = "REACHABLE";
+                        detail = "Website responded";
                     } catch (e) {
-                        updateRow(row, typeTag, item, "OFFLINE", "Connection failed", fullUrl, true);
+                        status = "OFFLINE";
+                        detail = "Could not connect";
+                        isError = true;
                     }
                 }
-                tbody.appendChild(row);
+
+                const row = `<tr>
+                    <td>${item}</td>
+                    <td class="${isError ? 'status-err' : 'status-ok'}">${status}</td>
+                    <td>${detail}</td>
+                    <td><a href="${fullLink}" target="_blank">${fullLink}</a></td>
+                </tr>`;
+                tbody.innerHTML += row;
             }
             exportBtn.style.display = "inline-block";
         }
 
-        function updateRow(row, type, input, status, detail, link, isErr = false) {
-            row.innerHTML = `
-                <td>${type}</td>
-                <td>${input}</td>
-                <td class="${isErr ? 'status-err' : 'status-ok'}">${status}</td>
-                <td>${detail}</td>
-                <td><a href="${link}" target="_blank">${link}</a></td>
-            `;
-        }
-
         function exportCSV() {
-            let csv = "Type,Input,Status,Details,Full_Link\n";
-            document.querySelectorAll("#resultsBody tr").forEach(row => {
-                const cols = row.querySelectorAll("td");
-                const rowData = Array.from(cols).map(c => `"${c.innerText.replace(/"/g, '""')}"`);
-                csv += rowData.join(",") + "\n";
+            let csv = "Input,Status,Detail,FullLink\n";
+            document.querySelectorAll("#tbody tr").forEach(tr => {
+                const tds = tr.querySelectorAll("td");
+                const row = [tds[0].innerText, tds[1].innerText, tds[2].innerText.replace(/,/g, ""), tds[3].innerText];
+                csv += row.join(",") + "\n";
             });
-
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'link_status_report.csv';
+            a.download = 'link_report.csv';
             a.click();
         }
     </script>
