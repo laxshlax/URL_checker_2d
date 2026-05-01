@@ -10,44 +10,66 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
 <style>
-:root { --green: #2da44e; --red: #cf222e; --blue: #0969da; --border: #d0d7de; }
-body { font-family: -apple-system, sans-serif; max-width: 1200px; margin: 30px auto; padding: 20px; }
-.box { background: #f6f8fa; border: 1px solid var(--border); padding: 20px; border-radius: 6px; }
+:root { --green:#2da44e; --red:#cf222e; --blue:#0969da; --border:#d0d7de; }
+
+body {
+    font-family:-apple-system,sans-serif;
+    max-width:1200px;
+    margin:30px auto;
+    padding:20px;
+}
+
+.box {
+    background:#f6f8fa;
+    border:1px solid var(--border);
+    padding:20px;
+    border-radius:6px;
+}
 
 textarea {
-    width: 100%; height: 100px; padding: 10px;
-    border: 1px solid var(--border); border-radius: 6px;
-    margin-bottom: 10px; font-family: monospace;
+    width:100%;
+    height:100px;
+    padding:10px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    margin-bottom:10px;
+    font-family:monospace;
 }
 
 button {
-    background: var(--green); color: white;
-    border: none; padding: 10px 15px;
-    border-radius: 6px; cursor: pointer;
-    font-weight: 600;
+    background:var(--green);
+    color:white;
+    border:none;
+    padding:10px 15px;
+    border-radius:6px;
+    cursor:pointer;
+    font-weight:600;
 }
 
-#exportBtn { background: var(--blue); margin-left: 10px; display: none; }
-#pdfBtn { background: #555; margin-left: 10px; display: none; }
+#exportBtn { background:var(--blue); margin-left:10px; display:none; }
+#pdfBtn { background:#555; margin-left:10px; display:none; }
 
 table {
-    width: 100%; border-collapse: collapse;
-    margin-top: 20px; font-size: 13px;
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+    font-size:13px;
 }
 
-th, td {
-    border: 1px solid var(--border);
-    padding: 8px; text-align: left;
+th,td {
+    border:1px solid var(--border);
+    padding:8px;
+    text-align:left;
 }
 
-th { background: #f6f8fa; }
+th { background:#f6f8fa; }
 
-.status-ok { color: var(--green); font-weight: bold; }
-.status-err { color: var(--red); font-weight: bold; }
-.date-text { color: #cf222e; font-weight: bold; }
+.status-ok { color:var(--green); font-weight:bold; }
+.status-err { color:var(--red); font-weight:bold; }
+.date-text { color:#cf222e; font-weight:bold; }
 
-a { color: #0969da; text-decoration: none; }
-a:hover { text-decoration: underline; }
+a { color:#0969da; text-decoration:none; }
+a:hover { text-decoration:underline; }
 </style>
 </head>
 
@@ -56,7 +78,7 @@ a:hover { text-decoration: underline; }
 <h2>DOI Metadata Tool (CSV + PDF Export)</h2>
 
 <div class="box">
-    <textarea id="input" placeholder="Paste DOIs here (one per line)..."></textarea>
+    <textarea id="input" placeholder="Paste DOIs (one per line)..."></textarea>
     <button onclick="checkDOIs()">Fetch Metadata</button>
     <button id="exportBtn" onclick="exportCSV()">Export CSV</button>
     <button id="pdfBtn" onclick="exportPDF()">Export PDF</button>
@@ -82,59 +104,52 @@ a:hover { text-decoration: underline; }
 <script>
 
 async function checkDOIs() {
-    const lines = document.getElementById('input').value.split('\n').filter(l => l.trim());
+    const lines = document.getElementById('input').value.split('\n').filter(l=>l.trim());
     const tbody = document.getElementById('tbody');
     const table = document.getElementById('resultTable');
 
-    tbody.innerHTML = "";
-    table.style.display = "table";
+    tbody.innerHTML="";
+    table.style.display="table";
 
     for (let doi of lines) {
         doi = doi.trim();
 
-        let status = "VALID";
-        let onlineDate = "N/A";
-        let journal = "-";
-        let title = "-";
-        let volume = "-";
-        let issue = "-";
-        let pubMonth = "-";
-        let isError = false;
+        let status="VALID", onlineDate="N/A", journal="-", title="-";
+        let volume="-", issue="-", pubMonth="-", isError=false;
 
         try {
             const res = await fetch(`https://api.crossref.org/works/${doi}`);
 
-            if (res.ok) {
-                const data = await res.json();
-                const msg = data.message;
+            if(res.ok){
+                const msg = (await res.json()).message;
 
-                title = msg.title ? msg.title[0] : "No title";
-                journal = msg['container-title'] ? msg['container-title'][0] : "-";
+                title = msg.title?.[0] || "No title";
+                journal = msg['container-title']?.[0] || "-";
 
                 // Online date
-                const pubOnline = msg['published-online'];
-                if (pubOnline && pubOnline['date-parts']) {
-                    const p = pubOnline['date-parts'][0];
+                const po = msg['published-online'];
+                if(po?.['date-parts']){
+                    const p = po['date-parts'][0];
                     onlineDate = `${p[0]}-${String(p[1]||1).padStart(2,'0')}-${String(p[2]||1).padStart(2,'0')}`;
                 }
 
                 volume = msg.volume || "-";
                 issue = msg.issue || "-";
 
-                const pubDate = msg['published-print'] || msg['published-online'] || msg['issued'];
-                if (pubDate && pubDate['date-parts']) {
-                    const m = pubDate['date-parts'][0][1];
-                    if (m) pubMonth = new Date(0, m-1).toLocaleString('en', { month: 'long' });
+                const pd = msg['published-print'] || msg['published-online'] || msg['issued'];
+                if(pd?.['date-parts']){
+                    const m = pd['date-parts'][0][1];
+                    if(m) pubMonth = new Date(0,m-1).toLocaleString('en',{month:'long'});
                 }
 
             } else {
-                status = `Error ${res.status}`;
-                isError = true;
+                status=`Error ${res.status}`;
+                isError=true;
             }
 
         } catch {
-            status = "API Error";
-            isError = true;
+            status="API Error";
+            isError=true;
         }
 
         const link = `https://doi.org/${doi}`;
@@ -142,7 +157,7 @@ async function checkDOIs() {
         tbody.innerHTML += `
         <tr>
             <td>${doi}</td>
-            <td class="${isError ? 'status-err' : 'status-ok'}">${status}</td>
+            <td class="${isError?'status-err':'status-ok'}">${status}</td>
             <td class="date-text">${onlineDate}</td>
             <td>${volume}</td>
             <td>${issue}</td>
@@ -153,63 +168,94 @@ async function checkDOIs() {
         </tr>`;
     }
 
-    document.getElementById('exportBtn').style.display = "inline-block";
-    document.getElementById('pdfBtn').style.display = "inline-block";
+    exportBtn.style.display="inline-block";
+    pdfBtn.style.display="inline-block";
 }
 
 
 // CSV EXPORT
-function exportCSV() {
-    let csv = "DOI,Status,PublishedOnline,Volume,Issue,Month,Journal,Title,Link\n";
+function exportCSV(){
+    let csv="DOI,Status,PublishedOnline,Volume,Issue,Month,Journal,Title,Link\n";
 
-    document.querySelectorAll("#tbody tr").forEach(tr => {
-        const tds = tr.querySelectorAll("td");
-        const row = Array.from(tds).map(td =>
-            `"${td.innerText.replace(/"/g, '""')}"`
-        );
-        csv += row.join(",") + "\n";
+    document.querySelectorAll("#tbody tr").forEach(tr=>{
+        const row=[...tr.querySelectorAll("td")]
+            .map(td=>`"${td.innerText.replace(/"/g,'""')}"`);
+        csv+=row.join(",")+"\n";
     });
 
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
+    const blob=new Blob([csv],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'DOI_Metadata_Report.csv';
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='DOI_Metadata_Report.csv';
     a.click();
 }
 
 
-// PDF EXPORT (LANDSCAPE)
-function exportPDF() {
+// PDF EXPORT (IMPROVED)
+function exportPDF(){
     const { jsPDF } = window.jspdf;
 
     const doc = new jsPDF({
-        orientation: "landscape",
-        unit: "pt",
-        format: "a4"
+        orientation:"landscape",
+        unit:"pt",
+        format:"a4"
     });
 
-    const headers = [[
-        "DOI","Status","Published Online","Volume","Issue","Month","Journal","Title","Link"
+    const headers=[[
+        "DOI","Status","Online","Vol","Issue","Month","Journal","Title","Link"
     ]];
 
-    const rows = [];
+    const rows=[];
 
-    document.querySelectorAll("#tbody tr").forEach(tr => {
-        const cells = tr.querySelectorAll("td");
-        rows.push(Array.from(cells).map(td => td.innerText));
+    document.querySelectorAll("#tbody tr").forEach(tr=>{
+        const cells=tr.querySelectorAll("td");
+        rows.push([...cells].map(td=>td.innerText));
     });
 
-    doc.text("DOI Metadata Report", 40, 30);
+    doc.text("DOI Metadata Report",40,30);
 
     doc.autoTable({
-        head: headers,
-        body: rows,
-        startY: 50,
-        styles: { fontSize: 8, cellPadding: 4 },
-        theme: "grid",
-        horizontalPageBreak: true
+        head:headers,
+        body:rows,
+        startY:50,
+
+        tableWidth:"wrap",
+        styles:{
+            fontSize:6,
+            cellPadding:2,
+            overflow:"linebreak"
+        },
+
+        columnStyles:{
+            0:{cellWidth:90},
+            1:{cellWidth:50},
+            2:{cellWidth:70},
+            3:{cellWidth:40},
+            4:{cellWidth:40},
+            5:{cellWidth:60},
+            6:{cellWidth:100},
+            7:{cellWidth:200},
+            8:{cellWidth:180}
+        },
+
+        theme:"grid",
+
+        didDrawCell:function(data){
+            if(data.column.index===8 && data.cell.section==='body'){
+                const url=data.cell.text[0];
+                if(url.startsWith("http")){
+                    doc.link(
+                        data.cell.x,
+                        data.cell.y,
+                        data.cell.width,
+                        data.cell.height,
+                        {url:url}
+                    );
+                }
+            }
+        }
     });
 
     doc.save("DOI_Metadata_Report.pdf");
